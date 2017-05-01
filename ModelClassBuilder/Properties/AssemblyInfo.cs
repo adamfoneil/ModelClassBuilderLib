@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ModelClassBuilder")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Model Class Builder for SQL Server")]
+[assembly: AssemblyDescription("Generates C# model classes from SQL Server tables")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ModelClassBuilder")]
-[assembly: AssemblyCopyright("Copyright ©  2017")]
+[assembly: AssemblyCompany("Adam O'Neil Software")]
+[assembly: AssemblyProduct("Model Class Builder")]
+[assembly: AssemblyCopyright("Copyright © Adam O'Neil 2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
