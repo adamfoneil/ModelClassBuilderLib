@@ -48,6 +48,8 @@ namespace AdamOneilSoftware.ModelClassBuilder
 
         public void SaveAs(string fileName)
         {
+            if (_stringBuilder == null) throw new NullReferenceException("Please call the BuildCSharpClass method first.");
+
             using (StreamWriter output = File.CreateText(fileName))
             {                
                 output.Write(_stringBuilder.ToString());
