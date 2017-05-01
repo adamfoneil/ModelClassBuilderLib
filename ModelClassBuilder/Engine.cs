@@ -20,30 +20,42 @@ namespace AdamOneilSoftware.ModelClassBuilder
         }
 
         public string ConnectionString { get; set; }
-        public string CodeNamespace { get; set; }
-        public string ClassName { get; set; }
+        public string CodeNamespace { get; set; }        
 
-        public StringBuilder BuildCSharpClass(string schema, string tableName)
-        {            
+        public StringBuilder CSharpClassFromTable(string schema, string tableName, string className = null)
+        {
+            if (string.IsNullOrEmpty(className)) className = tableName;
+
             using (SqlConnection cn = new SqlConnection(ConnectionString))
             {
                 cn.Open();
                 var pkColumns = GetPrimaryKeyColumns(cn, schema, tableName);
                 var fkColumns = GetForeignKeyColumns(cn, schema, tableName);
-                return BuildCSharpClass(cn, $"SELECT * FROM [{schema}].[{tableName}]", pkColumns, fkColumns);
+                var childTables = GetReferencingTables(cn, schema, tableName);
+                return BuildCSharpClassInner(cn, $"SELECT * FROM [{schema}].[{tableName}]", className, pkColumns, fkColumns, childTables);
             }            
         }
-        public StringBuilder BuildCSharpClass(string query)
+
+        private IEnumerable<string> GetReferencingTables(SqlConnection cn, string schema, string tableName)
+        {
+            return cn.Query<string>(
+                @"SELECT 	
+	                SCHEMA_NAME([child].[schema_id]) + '.' + [child].[name]	 
+                FROM 
+	                [sys].[foreign_keys] [fk] INNER JOIN [sys].[tables] [child] ON [fk].[parent_object_id]=[child].[object_id] 
+	                INNER JOIN [sys].[tables] [parent] ON [fk].[referenced_object_id]=[parent].[object_id]
+                WHERE 
+	                SCHEMA_NAME([parent].[schema_id])=@schema AND
+	                [parent].[name]=@table", new { schema = schema, table = tableName });
+        }
+
+        public StringBuilder CSharpClassFromQuery(string query, string className)
         {            
             using (SqlConnection cn = new SqlConnection(ConnectionString))
             {
                 cn.Open();
-                return BuildCSharpClass(cn, query, null, null);
+                return BuildCSharpClassInner(cn, query, className);
             }            
-        }
-        public void CopyToClipboard()
-        {
-            
         }
 
         public void SaveAs(string fileName)
@@ -56,7 +68,8 @@ namespace AdamOneilSoftware.ModelClassBuilder
             }
         }
 
-        private StringBuilder BuildCSharpClass(SqlConnection connection, string query, IEnumerable<string> pkColumns = null, Dictionary<string, ColumnRef> fkColumns = null)
+        private StringBuilder BuildCSharpClassInner(SqlConnection connection, string query, string className,
+            IEnumerable<string> pkColumns = null, Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
         {
             using (SqlCommand cmd = new SqlCommand(query, connection))
             {
@@ -74,7 +87,12 @@ namespace AdamOneilSoftware.ModelClassBuilder
 
                     _stringBuilder.AppendLine();
                     _stringBuilder.AppendLine($"namespace {CodeNamespace}\r\n{{");
-                    _stringBuilder.AppendLine($"\tpublic class {ClassName}\r\n\t{{");
+
+                    if (childTables?.Any() ?? false)
+                    {
+                        _stringBuilder.AppendLine($"\t// referencing tables: {string.Join(", ", childTables)}");
+                    }
+                    _stringBuilder.AppendLine($"\tpublic class {className}\r\n\t{{");
                     foreach (var col in columns)
                     {
                         if (pkColumns?.Contains(col.Name) ?? false)

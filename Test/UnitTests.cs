@@ -12,10 +12,13 @@ namespace Test
         {
             Engine e = new Engine();
             e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
-            e.CodeNamespace = "Whatever";
-            e.ClassName = "Sample";
-            e.BuildCSharpClass("dbo", "Customer");
+            e.CodeNamespace = "Whatever";         
+            
+            e.CSharpClassFromTable("dbo", "Customer");
             e.SaveAs(@"C:\Users\Adam\Desktop\Customer.cs");
+
+            e.CSharpClassFromTable("dbo", "Organization");
+            e.SaveAs(@"C:\Users\Adam\Desktop\Organization.cs");
         }
 
         [TestMethod]
@@ -23,10 +26,9 @@ namespace Test
         {
             Engine e = new Engine();
             e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
-            e.CodeNamespace = "Whatever";
-            e.ClassName = "Sample";
-            e.BuildCSharpClass("SELECT * FROM [Organization]");
-            e.SaveAs(@"C:\Users\Adam\Desktop\Organization.cs");
+            e.CodeNamespace = "Whatever";            
+            e.CSharpClassFromQuery("SELECT * FROM [Organization]", "OrgaizationQuery");
+            e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationQuery.cs");
         }
     }
 }
