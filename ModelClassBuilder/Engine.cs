@@ -80,7 +80,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
                             _stringBuilder.AppendLine("\t\t// primary key column");
                         }
 
-                        if (fkColumns.ContainsKey(col.Name))
+                        if (fkColumns?.ContainsKey(col.Name) ?? false)
                         {
                             _stringBuilder.AppendLine($"\t\t// references {fkColumns[col.Name]}");
                         }
