@@ -31,9 +31,33 @@ namespace AdamOneilSoftware.ModelClassBuilder
                 cn.Open();
                 var pkColumns = GetPrimaryKeyColumns(cn, schema, tableName);
                 var fkColumns = GetForeignKeyColumns(cn, schema, tableName);
+                var uniqueConstraints = GetUniqueConstraints(cn, schema, tableName);
                 var childTables = GetReferencingTables(cn, schema, tableName);
-                return BuildCSharpClassInner(cn, $"SELECT * FROM [{schema}].[{tableName}]", className, pkColumns, fkColumns, childTables);
+                return BuildCSharpClassInner(cn, $"SELECT * FROM [{schema}].[{tableName}]", 
+                    className, pkColumns, uniqueConstraints, fkColumns, childTables);
             }            
+        }
+
+        private Dictionary<string, string> GetUniqueConstraints(SqlConnection cn, string schema, string tableName)
+        {
+            var unique = cn.Query(
+                @"SELECT
+	                [col].[name] AS [ColumnName], [ndx].[name] AS [ConstraintName]
+                FROM 
+	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
+		                [ndx].[object_id]=[ndxcol].[object_id] AND
+		                [ndx].[index_id]=[ndxcol].[index_id]
+	                INNER JOIN [sys].[columns] [col] ON 
+		                [ndxcol].[column_id]=[col].[column_id] AND
+		                [ndxcol].[object_id]=[col].[object_id]
+	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
+                WHERE 
+	                [is_unique_constraint]=1 AND
+                    SCHEMA_NAME([t].[schema_id])=@schema AND
+                    [t].[name]=@table", new { schema = schema, table = tableName });
+            return unique.ToDictionary(
+                item => (string)item.ColumnName,
+                item => (string)item.ConstraintName);
         }
 
         private IEnumerable<string> GetReferencingTables(SqlConnection cn, string schema, string tableName)
@@ -69,7 +93,8 @@ namespace AdamOneilSoftware.ModelClassBuilder
         }
 
         private StringBuilder BuildCSharpClassInner(SqlConnection connection, string query, string className,
-            IEnumerable<string> pkColumns = null, Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
+            IEnumerable<string> pkColumns = null, Dictionary<string, string> uniqueConstraints = null,
+            Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
         {
             using (SqlCommand cmd = new SqlCommand(query, connection))
             {
@@ -98,6 +123,11 @@ namespace AdamOneilSoftware.ModelClassBuilder
                         if (pkColumns?.Contains(col.Name) ?? false)
                         {
                             _stringBuilder.AppendLine("\t\t// primary key column");
+                        }
+
+                        if (uniqueConstraints?.ContainsKey(col.Name) ?? false)
+                        {
+                            _stringBuilder.AppendLine($"\t\t// unique constraint {uniqueConstraints[col.Name]}");
                         }
 
                         if (fkColumns?.ContainsKey(col.Name) ?? false)
