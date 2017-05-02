@@ -13,7 +13,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
 {
     public class Engine
     {
-        private StringBuilder _stringBuilder;
+        private StringBuilder _content;
 
         public Engine()
         {
@@ -37,6 +37,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
                     className, pkColumns, uniqueConstraints, fkColumns, childTables);
             }            
         }
+
         public StringBuilder CSharpClassFromQuery(string query, string className)
         {            
             using (SqlConnection cn = new SqlConnection(ConnectionString))
@@ -46,13 +47,36 @@ namespace AdamOneilSoftware.ModelClassBuilder
             }            
         }
 
+        public void GenerateAllClasses(string outputFolder)
+        {
+            using (SqlConnection cn = new SqlConnection(ConnectionString))
+            {
+                cn.Open();
+                var tables = cn.Query(
+                    @"SELECT SCHEMA_NAME([schema_id]) AS [Schema], [name] AS [TableName] FROM [sys].[tables]");
+                foreach (var tbl in tables)
+                {
+                    string fileName = Path.Combine(outputFolder, $"{tbl.Schema}-{tbl.TableName}.cs");
+                    if (!File.Exists(fileName))
+                    {
+                        var content = CSharpClassFromTable(tbl.Schema, tbl.TableName);
+                        SaveInner(content, fileName);
+                    }
+                }
+            }
+        }
+
         public void SaveAs(string fileName)
         {
-            if (_stringBuilder == null) throw new NullReferenceException("Please call the BuildCSharpClass method first.");
+            if (_content == null) throw new NullReferenceException("Please call the CSharpClassFromTable or CSharpClassFromQuery method first.");
+            SaveInner(_content, fileName);
+        }
 
+        private void SaveInner(StringBuilder content, string fileName)
+        {
             using (StreamWriter output = File.CreateText(fileName))
-            {                
-                output.Write(_stringBuilder.ToString());
+            {
+                output.Write(content.ToString());
             }
         }
 
@@ -66,48 +90,48 @@ namespace AdamOneilSoftware.ModelClassBuilder
                 {
                     var tbl = reader.GetSchemaTable();
                     IEnumerable<ColumnInfo> columns = GetColumnInfo(tbl);
-                    _stringBuilder = new StringBuilder();
+                    _content = new StringBuilder();
 
-                    _stringBuilder.AppendLine("using System;");
+                    _content.AppendLine("using System;");
                     if (columns.Any(col => col.Size.HasValue))
                     {
-                        _stringBuilder.AppendLine("using System.ComponentModel.DataAnnotations;");
+                        _content.AppendLine("using System.ComponentModel.DataAnnotations;");
                     }
 
-                    _stringBuilder.AppendLine();
-                    _stringBuilder.AppendLine($"namespace {CodeNamespace}\r\n{{");
+                    _content.AppendLine();
+                    _content.AppendLine($"namespace {CodeNamespace}\r\n{{");
 
                     if (childTables?.Any() ?? false)
                     {
-                        _stringBuilder.AppendLine($"\t// referencing tables: {string.Join(", ", childTables)}");
+                        _content.AppendLine($"\t// referencing tables: {string.Join(", ", childTables)}");
                     }
-                    _stringBuilder.AppendLine($"\tpublic class {className}\r\n\t{{");
+                    _content.AppendLine($"\tpublic class {className}\r\n\t{{");
                     foreach (var col in columns)
                     {
                         if (pkColumns?.Contains(col.Name) ?? false)
                         {
-                            _stringBuilder.AppendLine("\t\t// primary key column");
+                            _content.AppendLine("\t\t// primary key column");
                         }
 
                         if (uniqueConstraints?.ContainsKey(col.Name) ?? false)
                         {
-                            _stringBuilder.AppendLine($"\t\t// unique constraint {uniqueConstraints[col.Name]}");
+                            _content.AppendLine($"\t\t// unique constraint {uniqueConstraints[col.Name]}");
                         }
 
                         if (fkColumns?.ContainsKey(col.Name) ?? false)
                         {
-                            _stringBuilder.AppendLine($"\t\t// references {fkColumns[col.Name]}");
+                            _content.AppendLine($"\t\t// references {fkColumns[col.Name]}");
                         }
                         
                         if (col.Size.HasValue)
                         {
-                            _stringBuilder.AppendLine($"\t\t[MaxLength({col.Size})]");
+                            _content.AppendLine($"\t\t[MaxLength({col.Size})]");
                         }
-                        _stringBuilder.AppendLine($"\t\tpublic {col.CSharpType} {col.Name} {{ get; set; }}");
+                        _content.AppendLine($"\t\tpublic {col.CSharpType} {col.Name} {{ get; set; }}");
                     }
-                    _stringBuilder.AppendLine("\t}"); // class
-                    _stringBuilder.AppendLine("}"); // namespace
-                    return _stringBuilder;
+                    _content.AppendLine("\t}"); // class
+                    _content.AppendLine("}"); // namespace
+                    return _content;
                 }
             }
 
