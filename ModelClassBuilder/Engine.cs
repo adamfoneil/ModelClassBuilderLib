@@ -37,42 +37,6 @@ namespace AdamOneilSoftware.ModelClassBuilder
                     className, pkColumns, uniqueConstraints, fkColumns, childTables);
             }            
         }
-
-        private Dictionary<string, string> GetUniqueConstraints(SqlConnection cn, string schema, string tableName)
-        {
-            var unique = cn.Query(
-                @"SELECT
-	                [col].[name] AS [ColumnName], [ndx].[name] AS [ConstraintName]
-                FROM 
-	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
-		                [ndx].[object_id]=[ndxcol].[object_id] AND
-		                [ndx].[index_id]=[ndxcol].[index_id]
-	                INNER JOIN [sys].[columns] [col] ON 
-		                [ndxcol].[column_id]=[col].[column_id] AND
-		                [ndxcol].[object_id]=[col].[object_id]
-	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
-                WHERE 
-	                [is_unique_constraint]=1 AND
-                    SCHEMA_NAME([t].[schema_id])=@schema AND
-                    [t].[name]=@table", new { schema = schema, table = tableName });
-            return unique.ToDictionary(
-                item => (string)item.ColumnName,
-                item => (string)item.ConstraintName);
-        }
-
-        private IEnumerable<string> GetReferencingTables(SqlConnection cn, string schema, string tableName)
-        {
-            return cn.Query<string>(
-                @"SELECT 	
-	                SCHEMA_NAME([child].[schema_id]) + '.' + [child].[name]	 
-                FROM 
-	                [sys].[foreign_keys] [fk] INNER JOIN [sys].[tables] [child] ON [fk].[parent_object_id]=[child].[object_id] 
-	                INNER JOIN [sys].[tables] [parent] ON [fk].[referenced_object_id]=[parent].[object_id]
-                WHERE 
-	                SCHEMA_NAME([parent].[schema_id])=@schema AND
-	                [parent].[name]=@table", new { schema = schema, table = tableName });
-        }
-
         public StringBuilder CSharpClassFromQuery(string query, string className)
         {            
             using (SqlConnection cn = new SqlConnection(ConnectionString))
@@ -172,6 +136,41 @@ namespace AdamOneilSoftware.ModelClassBuilder
             }
 
             return results;
+        }
+
+        private IEnumerable<string> GetReferencingTables(SqlConnection cn, string schema, string tableName)
+        {
+            return cn.Query<string>(
+                @"SELECT 	
+	                SCHEMA_NAME([child].[schema_id]) + '.' + [child].[name]	 
+                FROM 
+	                [sys].[foreign_keys] [fk] INNER JOIN [sys].[tables] [child] ON [fk].[parent_object_id]=[child].[object_id] 
+	                INNER JOIN [sys].[tables] [parent] ON [fk].[referenced_object_id]=[parent].[object_id]
+                WHERE 
+	                SCHEMA_NAME([parent].[schema_id])=@schema AND
+	                [parent].[name]=@table", new { schema = schema, table = tableName });
+        }
+
+        private Dictionary<string, string> GetUniqueConstraints(SqlConnection cn, string schema, string tableName)
+        {
+            var unique = cn.Query(
+                @"SELECT
+	                [col].[name] AS [ColumnName], [ndx].[name] AS [ConstraintName]
+                FROM 
+	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
+		                [ndx].[object_id]=[ndxcol].[object_id] AND
+		                [ndx].[index_id]=[ndxcol].[index_id]
+	                INNER JOIN [sys].[columns] [col] ON 
+		                [ndxcol].[column_id]=[col].[column_id] AND
+		                [ndxcol].[object_id]=[col].[object_id]
+	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
+                WHERE 
+	                [is_unique_constraint]=1 AND
+                    SCHEMA_NAME([t].[schema_id])=@schema AND
+                    [t].[name]=@table", new { schema = schema, table = tableName });
+            return unique.ToDictionary(
+                item => (string)item.ColumnName,
+                item => (string)item.ConstraintName);
         }
 
         private string CSharpTypeName(CSharpCodeProvider provider, Type type)
