@@ -229,14 +229,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
             public bool IsNullable { get; set; }
         }
 
-        public class KeyInfo
-        {
-            public string ColumnName { get; set; }
-            public bool InPrimaryKey { get; set; }
-            public ColumnRef ForeignKey { get; set; }
-        }
-
-        public class ColumnRef
+        internal class ColumnRef
         {
             public string Schema { get; set; }
             public string TableName { get; set; }
