@@ -72,7 +72,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
             SaveInner(_content, fileName);
         }
 
-        private void SaveInner(StringBuilder content, string fileName)
+        private static void SaveInner(StringBuilder content, string fileName)
         {
             using (StreamWriter output = File.CreateText(fileName))
             {

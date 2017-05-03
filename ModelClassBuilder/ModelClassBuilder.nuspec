@@ -6,10 +6,10 @@
     <title>$title$</title>
     <authors>$author$</authors>
     <owners>$author$</owners>    
-    <projectUrl>http://PROJECT_URL_HERE_OR_DELETE_THIS_LINE</projectUrl>    
+    <projectUrl>https://github.com/adamosoftware/ModelClassBuilderLib</projectUrl>    
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>$description$</description>    
     <copyright>$copyright$</copyright>
-    <tags>Tag1 Tag2</tags>
+    <tags>orm</tags>
   </metadata>
 </package>
