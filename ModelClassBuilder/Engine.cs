@@ -97,7 +97,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
             return BuildCSharpClassFromCommand(command, className, WriteClassHeader, WriteClassFooter, columnAttributes:IncludeAttributes);
         }
 
-        public StringBuilder CShaprInnerClassFromCommand(SqlCommand command, string className)
+        public StringBuilder CSharpInnerClassFromCommand(SqlCommand command, string className)
         {
             return BuildCSharpClassFromCommand(command, className, null, null, columnAttributes: IncludeAttributes);
         }
