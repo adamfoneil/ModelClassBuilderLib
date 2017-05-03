@@ -91,6 +91,16 @@ namespace AdamOneilSoftware.ModelClassBuilder
             }
         }
 
+        public StringBuilder CSharpOuterClassFromCommand(SqlCommand command, string className)
+        {
+            return BuildCSharpClassFromCommand(command, className, WriteClassHeader, WriteClassFooter);
+        }
+
+        public StringBuilder CShaprInnerClassFromCommand(SqlCommand command, string className)
+        {
+            return BuildCSharpClassFromCommand(command, className, null, null);
+        }
+
         public void GenerateAllClasses(string outputFolder)
         {
             using (SqlConnection cn = new SqlConnection(ConnectionString))
@@ -129,59 +139,67 @@ namespace AdamOneilSoftware.ModelClassBuilder
             Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer,
             IEnumerable<string> pkColumns = null, Dictionary<string, string> uniqueConstraints = null,
             Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
+        {            
+            using (SqlCommand cmd = new SqlCommand(query, connection))
+            {
+                return BuildCSharpClassFromCommand(cmd, className, header, footer, pkColumns, uniqueConstraints, fkColumns, childTables);
+            }            
+        }
+
+        private static StringBuilder BuildCSharpClassFromCommand(
+            SqlCommand cmd, string className, Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer,
+            IEnumerable<string> pkColumns = null, Dictionary<string, string> uniqueConstraints = null, 
+            Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
         {
             StringBuilder result = new StringBuilder();
 
-            using (SqlCommand cmd = new SqlCommand(query, connection))
+            using (SqlDataReader reader = cmd.ExecuteReader(CommandBehavior.SchemaOnly))
             {
-                using (SqlDataReader reader = cmd.ExecuteReader(CommandBehavior.SchemaOnly))
+                var tbl = reader.GetSchemaTable();
+                IEnumerable<ColumnInfo> columns = GetColumnInfo(tbl);
+
+                int indentLevel = 0;
+
+                if (header != null)
                 {
-                    var tbl = reader.GetSchemaTable();
-                    IEnumerable<ColumnInfo> columns = GetColumnInfo(tbl);
-
-                    int indentLevel = 0;
-
-                    if (header != null)
-                    {
-                        indentLevel++;
-                        header.Invoke(result, columns);
-                    }
-                                        
-                    string indent = new string('\t', indentLevel);
-
-                    if (childTables?.Any() ?? false)
-                    {
-                        result.AppendLine($"{indent}// referencing tables: {string.Join(", ", childTables)}");
-                    }
-
-                    result.AppendLine($"{indent}public class {className}\r\n{indent}{{");
-                    foreach (var col in columns)
-                    {
-                        if (pkColumns?.Contains(col.Name) ?? false)
-                        {
-                            result.AppendLine($"{indent}\t// primary key column");
-                        }
-
-                        if (uniqueConstraints?.ContainsKey(col.Name) ?? false)
-                        {
-                            result.AppendLine($"{indent}\t// unique constraint {uniqueConstraints[col.Name]}");
-                        }
-
-                        if (fkColumns?.ContainsKey(col.Name) ?? false)
-                        {
-                            result.AppendLine($"{indent}\t// references {fkColumns[col.Name]}");
-                        }
-
-                        if (col.Size.HasValue)
-                        {
-                            result.AppendLine($"{indent}\t[MaxLength({col.Size})]");
-                        }
-                        result.AppendLine($"{indent}\tpublic {col.CSharpType} {col.Name} {{ get; set; }}");
-                    }
-                    result.AppendLine($"{indent}}}"); // class
-
-                    footer?.Invoke(result);
+                    indentLevel++;
+                    header.Invoke(result, columns);
                 }
+
+                string indent = new string('\t', indentLevel);
+
+                if (childTables?.Any() ?? false)
+                {
+                    result.AppendLine($"{indent}// referencing tables: {string.Join(", ", childTables)}");
+                }
+
+                result.AppendLine($"{indent}public class {className}\r\n{indent}{{");
+                foreach (var col in columns)
+                {
+                    if (pkColumns?.Contains(col.Name) ?? false)
+                    {
+                        result.AppendLine($"{indent}\t// primary key column");
+                    }
+
+                    if (uniqueConstraints?.ContainsKey(col.Name) ?? false)
+                    {
+                        result.AppendLine($"{indent}\t// unique constraint {uniqueConstraints[col.Name]}");
+                    }
+
+                    if (fkColumns?.ContainsKey(col.Name) ?? false)
+                    {
+                        result.AppendLine($"{indent}\t// references {fkColumns[col.Name]}");
+                    }
+
+                    if (col.Size.HasValue)
+                    {
+                        result.AppendLine($"{indent}\t[MaxLength({col.Size})]");
+                    }
+                    result.AppendLine($"{indent}\tpublic {col.CSharpType} {col.Name} {{ get; set; }}");
+                }
+                result.AppendLine($"{indent}}}"); // class
+
+                footer?.Invoke(result);
             }
 
             return result;
