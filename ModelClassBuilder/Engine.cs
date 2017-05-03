@@ -21,6 +21,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
 
         public string ConnectionString { get; set; }
         public string CodeNamespace { get; set; }
+        public bool IncludeAttributes { get; set; } = true;
 
         public StringBuilder CSharpOuterClassFromTable(string schema, string tableName, string className = null)
         {
@@ -67,7 +68,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
                 return BuildCSharpClass(
                     cn, $"SELECT * FROM [{schema}].[{tableName}]", className,
                     header, footer, 
-                    pkColumns, uniqueConstraints, fkColumns, childTables);
+                    pkColumns, uniqueConstraints, fkColumns, childTables, IncludeAttributes);
             }            
         }
 
@@ -93,12 +94,12 @@ namespace AdamOneilSoftware.ModelClassBuilder
 
         public StringBuilder CSharpOuterClassFromCommand(SqlCommand command, string className)
         {
-            return BuildCSharpClassFromCommand(command, className, WriteClassHeader, WriteClassFooter);
+            return BuildCSharpClassFromCommand(command, className, WriteClassHeader, WriteClassFooter, columnAttributes:IncludeAttributes);
         }
 
         public StringBuilder CShaprInnerClassFromCommand(SqlCommand command, string className)
         {
-            return BuildCSharpClassFromCommand(command, className, null, null);
+            return BuildCSharpClassFromCommand(command, className, null, null, columnAttributes: IncludeAttributes);
         }
 
         public void GenerateAllClasses(string outputFolder)
@@ -138,18 +139,18 @@ namespace AdamOneilSoftware.ModelClassBuilder
             SqlConnection connection, string query, string className,
             Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer,
             IEnumerable<string> pkColumns = null, Dictionary<string, string> uniqueConstraints = null,
-            Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
+            Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null, bool columnAttributes = true)
         {            
             using (SqlCommand cmd = new SqlCommand(query, connection))
             {
-                return BuildCSharpClassFromCommand(cmd, className, header, footer, pkColumns, uniqueConstraints, fkColumns, childTables);
+                return BuildCSharpClassFromCommand(cmd, className, header, footer, pkColumns, uniqueConstraints, fkColumns, childTables, columnAttributes);
             }            
         }
 
         private static StringBuilder BuildCSharpClassFromCommand(
             SqlCommand cmd, string className, Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer,
             IEnumerable<string> pkColumns = null, Dictionary<string, string> uniqueConstraints = null, 
-            Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
+            Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null, bool columnAttributes = true)
         {
             StringBuilder result = new StringBuilder();
 
@@ -191,7 +192,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
                         result.AppendLine($"{indent}\t// references {fkColumns[col.Name]}");
                     }
 
-                    if (col.Size.HasValue)
+                    if (col.Size.HasValue && columnAttributes)
                     {
                         result.AppendLine($"{indent}\t[MaxLength({col.Size})]");
                     }
