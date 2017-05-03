@@ -10,6 +10,6 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>$description$</description>    
     <copyright>$copyright$</copyright>
-    <tags>orm</tags>
+    <tags>orm codegen</tags>
   </metadata>
 </package>
