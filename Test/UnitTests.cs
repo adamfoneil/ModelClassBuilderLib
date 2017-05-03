@@ -8,27 +8,41 @@ namespace Test
     public class UnitTests
     {
         [TestMethod]
-        public void Table()
+        public void TableOuterClass()
         {
             Engine e = new Engine();
             e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
             e.CodeNamespace = "Whatever";         
             
-            e.CSharpClassFromTable("dbo", "Customer");
-            e.SaveAs(@"C:\Users\Adam\Desktop\Customer.cs");
+            e.CSharpOuterClassFromTable("dbo", "Customer");
+            e.SaveAs(@"C:\Users\Adam\Desktop\CustomerOuter.cs");
 
-            e.CSharpClassFromTable("dbo", "Organization");
-            e.SaveAs(@"C:\Users\Adam\Desktop\Organization.cs");
+            e.CSharpOuterClassFromTable("dbo", "Organization");
+            e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationOuter.cs");
         }
 
         [TestMethod]
-        public void Query()
+        public void QueryOuterClass()
         {
             Engine e = new Engine();
             e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
             e.CodeNamespace = "Whatever";            
-            e.CSharpClassFromQuery("SELECT * FROM [Organization]", "OrgaizationQuery");
+            e.CSharpOuterClassFromQuery("SELECT * FROM [Organization]", "OrgaizationQuery");
             e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationQuery.cs");
+        }
+
+        [TestMethod]
+        public void TableInnerClass()
+        {
+            Engine e = new Engine();
+            e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
+            e.CodeNamespace = "Whatever";
+
+            e.CSharpInnerClassFromTable("dbo", "Customer");
+            e.SaveAs(@"C:\Users\Adam\Desktop\CustomerInner.cs");
+
+            e.CSharpInnerClassFromTable("dbo", "Organization");
+            e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationInner.cs");
         }
     }
 }

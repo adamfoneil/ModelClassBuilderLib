@@ -20,9 +20,39 @@ namespace AdamOneilSoftware.ModelClassBuilder
         }
 
         public string ConnectionString { get; set; }
-        public string CodeNamespace { get; set; }        
+        public string CodeNamespace { get; set; }
 
-        public StringBuilder CSharpClassFromTable(string schema, string tableName, string className = null)
+        public StringBuilder CSharpOuterClassFromTable(string schema, string tableName, string className = null)
+        {
+            _content = CSharpClassFromTable(schema, tableName, WriteClassHeader, WriteClassFooter);
+            return _content;
+        }
+
+        public StringBuilder CSharpInnerClassFromTable(string schema, string tableName, string className = null)
+        {
+            _content = CSharpClassFromTable(schema, tableName, null, null, className);
+            return _content;
+        }
+
+        private void WriteClassHeader(StringBuilder sb, IEnumerable<ColumnInfo> columns)
+        {
+            sb.AppendLine("using System;");
+            if (columns.Any(col => col.Size.HasValue))
+            {
+                sb.AppendLine("using System.ComponentModel.DataAnnotations;");
+            }
+            sb.AppendLine();
+            sb.AppendLine($"namespace {CodeNamespace}\r\n{{");
+        }
+
+        private void WriteClassFooter(StringBuilder sb)
+        {
+            sb.AppendLine("}"); // end namespace
+        }        
+
+        private StringBuilder CSharpClassFromTable(string schema, string tableName,
+            Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer,
+            string className = null)
         {
             if (string.IsNullOrEmpty(className)) className = tableName;
 
@@ -33,18 +63,32 @@ namespace AdamOneilSoftware.ModelClassBuilder
                 var fkColumns = GetForeignKeyColumns(cn, schema, tableName);
                 var uniqueConstraints = GetUniqueConstraints(cn, schema, tableName);
                 var childTables = GetReferencingTables(cn, schema, tableName);
-                return BuildCSharpClassInner(cn, $"SELECT * FROM [{schema}].[{tableName}]", 
-                    className, pkColumns, uniqueConstraints, fkColumns, childTables);
+
+                return BuildCSharpClass(
+                    cn, $"SELECT * FROM [{schema}].[{tableName}]", className,
+                    header, footer, 
+                    pkColumns, uniqueConstraints, fkColumns, childTables);
             }            
         }
 
-        public StringBuilder CSharpClassFromQuery(string query, string className)
+        public StringBuilder CSharpOuterClassFromQuery(string query, string className)
         {            
             using (SqlConnection cn = new SqlConnection(ConnectionString))
             {
                 cn.Open();
-                return BuildCSharpClassInner(cn, query, className);
+                _content = BuildCSharpClass(cn, query, className, WriteClassHeader, WriteClassFooter);
+                return _content;
             }            
+        }
+
+        public StringBuilder CSharpInnerClassFromQuery(string query, string className)
+        {
+            using (SqlConnection cn = new SqlConnection(ConnectionString))
+            {
+                cn.Open();
+                _content = BuildCSharpClass(cn, query, className, null, null);
+                return _content;
+            }
         }
 
         public void GenerateAllClasses(string outputFolder)
@@ -59,7 +103,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
                     string fileName = Path.Combine(outputFolder, $"{tbl.Schema}-{tbl.TableName}.cs");
                     if (!File.Exists(fileName))
                     {
-                        var content = CSharpClassFromTable(tbl.Schema, tbl.TableName);
+                        var content = CSharpOuterClassFromTable(tbl.Schema, tbl.TableName);
                         SaveInner(content, fileName);
                     }
                 }
@@ -80,64 +124,70 @@ namespace AdamOneilSoftware.ModelClassBuilder
             }
         }
 
-        private StringBuilder BuildCSharpClassInner(SqlConnection connection, string query, string className,
+        private static StringBuilder BuildCSharpClass(
+            SqlConnection connection, string query, string className,
+            Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer,
             IEnumerable<string> pkColumns = null, Dictionary<string, string> uniqueConstraints = null,
             Dictionary<string, ColumnRef> fkColumns = null, IEnumerable<string> childTables = null)
         {
+            StringBuilder result = new StringBuilder();
+
             using (SqlCommand cmd = new SqlCommand(query, connection))
             {
                 using (SqlDataReader reader = cmd.ExecuteReader(CommandBehavior.SchemaOnly))
                 {
                     var tbl = reader.GetSchemaTable();
                     IEnumerable<ColumnInfo> columns = GetColumnInfo(tbl);
-                    _content = new StringBuilder();
 
-                    _content.AppendLine("using System;");
-                    if (columns.Any(col => col.Size.HasValue))
+                    int indentLevel = 0;
+
+                    if (header != null)
                     {
-                        _content.AppendLine("using System.ComponentModel.DataAnnotations;");
+                        indentLevel++;
+                        header.Invoke(result, columns);
                     }
-
-                    _content.AppendLine();
-                    _content.AppendLine($"namespace {CodeNamespace}\r\n{{");
+                                        
+                    string indent = new string('\t', indentLevel);
 
                     if (childTables?.Any() ?? false)
                     {
-                        _content.AppendLine($"\t// referencing tables: {string.Join(", ", childTables)}");
+                        result.AppendLine($"{indent}// referencing tables: {string.Join(", ", childTables)}");
                     }
-                    _content.AppendLine($"\tpublic class {className}\r\n\t{{");
+
+                    result.AppendLine($"{indent}public class {className}\r\n{indent}{{");
                     foreach (var col in columns)
                     {
                         if (pkColumns?.Contains(col.Name) ?? false)
                         {
-                            _content.AppendLine("\t\t// primary key column");
+                            result.AppendLine($"{indent}\t// primary key column");
                         }
 
                         if (uniqueConstraints?.ContainsKey(col.Name) ?? false)
                         {
-                            _content.AppendLine($"\t\t// unique constraint {uniqueConstraints[col.Name]}");
+                            result.AppendLine($"{indent}\t// unique constraint {uniqueConstraints[col.Name]}");
                         }
 
                         if (fkColumns?.ContainsKey(col.Name) ?? false)
                         {
-                            _content.AppendLine($"\t\t// references {fkColumns[col.Name]}");
+                            result.AppendLine($"{indent}\t// references {fkColumns[col.Name]}");
                         }
-                        
+
                         if (col.Size.HasValue)
                         {
-                            _content.AppendLine($"\t\t[MaxLength({col.Size})]");
+                            result.AppendLine($"{indent}\t[MaxLength({col.Size})]");
                         }
-                        _content.AppendLine($"\t\tpublic {col.CSharpType} {col.Name} {{ get; set; }}");
+                        result.AppendLine($"{indent}\tpublic {col.CSharpType} {col.Name} {{ get; set; }}");
                     }
-                    _content.AppendLine("\t}"); // class
-                    _content.AppendLine("}"); // namespace
-                    return _content;
+                    result.AppendLine($"{indent}}}"); // class
+
+                    footer?.Invoke(result);
                 }
             }
 
+            return result;
         }
 
-        private IEnumerable<ColumnInfo> GetColumnInfo(DataTable schemaTable)
+        private static IEnumerable<ColumnInfo> GetColumnInfo(DataTable schemaTable)
         {
             List<ColumnInfo> results = new List<ColumnInfo>();
 
@@ -197,7 +247,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
                 item => (string)item.ConstraintName);
         }
 
-        private string CSharpTypeName(CSharpCodeProvider provider, Type type)
+        private static string CSharpTypeName(CSharpCodeProvider provider, Type type)
         {
             CodeTypeReference typeRef = new CodeTypeReference(type);
             return provider.GetTypeOutput(typeRef).Replace("System.", string.Empty);
