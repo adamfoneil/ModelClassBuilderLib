@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using AdamOneilSoftware.ModelClassBuilder;
+using System.Data.SqlClient;
 
 namespace Test
 {
@@ -11,38 +12,52 @@ namespace Test
         public void TableOuterClass()
         {
             Engine e = new Engine();
-            e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
-            e.CodeNamespace = "Whatever";         
-            
-            e.CSharpOuterClassFromTable("dbo", "Customer");
-            e.SaveAs(@"C:\Users\Adam\Desktop\CustomerOuter.cs");
+            using (SqlConnection cn = new SqlConnection("Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True"))
+            {
+                cn.Open();
+                e.Connection = cn;
 
-            e.CSharpOuterClassFromTable("dbo", "Organization");
-            e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationOuter.cs");
+                e.CodeNamespace = "Whatever";
+                e.CSharpOuterClassFromTable("dbo", "Customer");
+                e.SaveAs(@"C:\Users\Adam\Desktop\CustomerOuter.cs");
+
+                e.CSharpOuterClassFromTable("dbo", "Organization");
+                e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationOuter.cs");
+            }
+
         }
 
         [TestMethod]
         public void QueryOuterClass()
         {
             Engine e = new Engine();
-            e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
-            e.CodeNamespace = "Whatever";            
-            e.CSharpOuterClassFromQuery("SELECT * FROM [Organization]", "OrgaizationQuery");
-            e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationQuery.cs");
+            using (SqlConnection cn = new SqlConnection("Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True"))
+            {
+                cn.Open();
+                e.Connection = cn;
+
+                e.CodeNamespace = "Whatever";
+                e.CSharpOuterClassFromQuery("SELECT * FROM [Organization]", "OrgaizationQuery");
+                e.SaveAs(@"C:\Users\Adam\Desktop\MCB\OrganizationQuery.cs");
+            }
         }
 
         [TestMethod]
         public void TableInnerClass()
         {
             Engine e = new Engine();
-            e.ConnectionString = "Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True";
-            e.CodeNamespace = "Whatever";
+            using (SqlConnection cn = new SqlConnection("Data Source=localhost;Initial Catalog=PostulateTest;Integrated Security=True"))
+            {
+                cn.Open();
+                e.Connection = cn;
+                e.CodeNamespace = "Whatever";
+                e.CSharpInnerClassFromTable("dbo", "Customer");
+                e.SaveAs(@"C:\Users\Adam\Desktop\MCB\CustomerInner.cs");
 
-            e.CSharpInnerClassFromTable("dbo", "Customer");
-            e.SaveAs(@"C:\Users\Adam\Desktop\CustomerInner.cs");
+                e.CSharpInnerClassFromTable("dbo", "Organization");
+                e.SaveAs(@"C:\Users\Adam\Desktop\MCB\OrganizationInner.cs");
+            }
 
-            e.CSharpInnerClassFromTable("dbo", "Organization");
-            e.SaveAs(@"C:\Users\Adam\Desktop\OrganizationInner.cs");
         }
     }
 }
