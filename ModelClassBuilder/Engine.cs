@@ -89,8 +89,70 @@ namespace AdamOneilSoftware.ModelClassBuilder
             SaveInner(_content, fileName);
         }
 
+        public static IEnumerable<ColumnRef> GetReferencingTables(SqlConnection cn, string schema, string tableName)
+        {
+            return cn.Query<ColumnRef>(
+                @"SELECT	
+                    SCHEMA_NAME([child].[schema_id]) AS [Schema],
+                    [child].[name] AS [TableName],
+	                [child_col].[name] AS [ColumnName]
+                FROM 
+	                [sys].[foreign_keys] [fk] INNER JOIN [sys].[tables] [child] ON [fk].[parent_object_id]=[child].[object_id] 
+	                INNER JOIN [sys].[tables] [parent] ON [fk].[referenced_object_id]=[parent].[object_id]	
+	                INNER JOIN [sys].[foreign_key_columns] [fkcol] ON 
+		                [fk].[object_id]=[fkcol].[constraint_object_id]
+	                INNER JOIN [sys].[columns] [child_col] ON
+		                [fkcol].[parent_object_id]=[child_col].[object_id] AND
+		                [fkcol].[parent_column_id]=[child_col].[column_id]
+                WHERE
+                	SCHEMA_NAME([parent].[schema_id])=@schema AND
+                	[parent].[name]=@table", new { schema = schema, table = tableName });
+        }
+
+        public static IEnumerable<string> GetPrimaryKeyColumns(SqlConnection cn, string schema, string tableName)
+        {
+            return cn.Query<string>(
+                @"SELECT 	
+	                [col].[name]
+                FROM 
+	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
+		                [ndx].[object_id]=[ndxcol].[object_id] AND
+		                [ndx].[index_id]=[ndxcol].[index_id]
+	                INNER JOIN [sys].[columns] [col] ON 
+		                [ndxcol].[column_id]=[col].[column_id] AND
+		                [ndxcol].[object_id]=[col].[object_id]
+	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
+                WHERE 
+	                [is_primary_key]=1 AND
+	                SCHEMA_NAME([t].[schema_id])=@schema AND
+	                [t].[name]=@table", new { schema = schema, table = tableName });
+        }
+
+        public static Dictionary<string, ColumnRef> GetForeignKeyColumns(SqlConnection cn, string schema, string tableName)
+        {
+            return cn.Query(
+                @"SELECT 
+	                [col].[Name] AS [ForeignKeyColumn], [parent].[Name] AS [TableName], SCHEMA_NAME([parent].[schema_id]) AS [Schema], [parent_col].[name] AS [ColumnName]
+                FROM 
+	                [sys].[foreign_key_columns] [fkcol] INNER JOIN [sys].[columns] [col] ON 
+		                [fkcol].[parent_object_id]=[col].[object_id] AND
+		                [fkcol].[parent_column_id]=[col].[column_id]
+	                INNER JOIN [sys].[foreign_keys] [fk] ON [fkcol].[constraint_object_id]=[fk].[object_id]
+	                INNER JOIN [sys].[tables] [child] ON [fkcol].[parent_object_id]=[child].[object_id]
+	                INNER JOIN [sys].[tables] [parent] ON [fkcol].[referenced_object_id]=[parent].[object_id]
+	                INNER JOIN [sys].[columns] [parent_col] ON 
+		                [fkcol].[referenced_column_id]=[parent_col].[column_id] AND
+		                [fkcol].[referenced_object_id]=[parent_col].[object_id]
+                WHERE
+	                SCHEMA_NAME([child].[schema_id])=@schema AND
+	                [child].[name]=@table", new { schema = schema, table = tableName })
+                    .ToDictionary(
+                        item => (string)item.ForeignKeyColumn, 
+                        item => new ColumnRef() { Schema = item.Schema, TableName = item.TableName, ColumnName = item.ColumnName });
+        }
+
         private StringBuilder CSharpClassFromTable(
-            string schema, string tableName,
+                    string schema, string tableName,
             Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer, string className = null)
         {            
              return CSharpClassFromTable(Connection, schema, tableName, header, footer, className);
@@ -103,7 +165,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
             var pkColumns = GetPrimaryKeyColumns(cn, schema, tableName);
             var fkColumns = GetForeignKeyColumns(cn, schema, tableName);
             var uniqueConstraints = GetUniqueConstraints(cn, schema, tableName);
-            var childTables = GetReferencingTables(cn, schema, tableName);
+            var childTables = GetReferencingTables(cn, schema, tableName).GroupBy(cr => cr.Schema + "." + cr.TableName).Select(grp => grp.Key);
 
             return BuildCSharpClass(
                 cn, $"SELECT * FROM [{schema}].[{tableName}]", className,
@@ -217,20 +279,6 @@ namespace AdamOneilSoftware.ModelClassBuilder
 
             return results;
         }
-
-        private IEnumerable<string> GetReferencingTables(SqlConnection cn, string schema, string tableName)
-        {
-            return cn.Query<string>(
-                @"SELECT 	
-	                SCHEMA_NAME([child].[schema_id]) + '.' + [child].[name]	 
-                FROM 
-	                [sys].[foreign_keys] [fk] INNER JOIN [sys].[tables] [child] ON [fk].[parent_object_id]=[child].[object_id] 
-	                INNER JOIN [sys].[tables] [parent] ON [fk].[referenced_object_id]=[parent].[object_id]
-                WHERE 
-	                SCHEMA_NAME([parent].[schema_id])=@schema AND
-	                [parent].[name]=@table", new { schema = schema, table = tableName });
-        }
-
         private Dictionary<string, string> GetUniqueConstraints(SqlConnection cn, string schema, string tableName)
         {
             var unique = cn.Query(
@@ -258,49 +306,6 @@ namespace AdamOneilSoftware.ModelClassBuilder
             CodeTypeReference typeRef = new CodeTypeReference(type);
             return provider.GetTypeOutput(typeRef).Replace("System.", string.Empty);
         }
-
-        private IEnumerable<string> GetPrimaryKeyColumns(SqlConnection cn, string schema, string tableName)
-        {
-            return cn.Query<string>(
-                @"SELECT 	
-	                [col].[name]
-                FROM 
-	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
-		                [ndx].[object_id]=[ndxcol].[object_id] AND
-		                [ndx].[index_id]=[ndxcol].[index_id]
-	                INNER JOIN [sys].[columns] [col] ON 
-		                [ndxcol].[column_id]=[col].[column_id] AND
-		                [ndxcol].[object_id]=[col].[object_id]
-	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
-                WHERE 
-	                [is_primary_key]=1 AND
-	                SCHEMA_NAME([t].[schema_id])=@schema AND
-	                [t].[name]=@table", new { schema = schema, table = tableName });
-        }
-
-        private Dictionary<string, ColumnRef> GetForeignKeyColumns(SqlConnection cn, string schema, string tableName)
-        {
-            return cn.Query(
-                @"SELECT 
-	                [col].[Name] AS [ForeignKeyColumn], [parent].[Name] AS [TableName], SCHEMA_NAME([parent].[schema_id]) AS [Schema], [parent_col].[name] AS [ColumnName]
-                FROM 
-	                [sys].[foreign_key_columns] [fkcol] INNER JOIN [sys].[columns] [col] ON 
-		                [fkcol].[parent_object_id]=[col].[object_id] AND
-		                [fkcol].[parent_column_id]=[col].[column_id]
-	                INNER JOIN [sys].[foreign_keys] [fk] ON [fkcol].[constraint_object_id]=[fk].[object_id]
-	                INNER JOIN [sys].[tables] [child] ON [fkcol].[parent_object_id]=[child].[object_id]
-	                INNER JOIN [sys].[tables] [parent] ON [fkcol].[referenced_object_id]=[parent].[object_id]
-	                INNER JOIN [sys].[columns] [parent_col] ON 
-		                [fkcol].[referenced_column_id]=[parent_col].[column_id] AND
-		                [fkcol].[referenced_object_id]=[parent_col].[object_id]
-                WHERE
-	                SCHEMA_NAME([child].[schema_id])=@schema AND
-	                [child].[name]=@table", new { schema = schema, table = tableName })
-                    .ToDictionary(
-                        item => (string)item.ForeignKeyColumn, 
-                        item => new ColumnRef() { Schema = item.Schema, TableName = item.TableName, ColumnName = item.ColumnName });
-        }
-
         private void WriteClassHeader(StringBuilder sb, IEnumerable<ColumnInfo> columns)
         {
             sb.AppendLine("using System;");
@@ -325,7 +330,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
             public bool IsNullable { get; set; }
         }
 
-        internal class ColumnRef
+        public class ColumnRef
         {
             public string Schema { get; set; }
             public string TableName { get; set; }
