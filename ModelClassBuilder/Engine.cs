@@ -128,9 +128,9 @@ namespace AdamOneilSoftware.ModelClassBuilder
 	                [t].[name]=@table", new { schema = schema, table = tableName });
         }
 
-        public static Dictionary<string, ColumnRef> GetForeignKeyColumns(SqlConnection cn, string schema, string tableName)
+        public static Dictionary<string, ColumnRef> GetForeignKeyColumns(SqlConnection connection, string schema, string tableName)
         {
-            return cn.Query(
+            return connection.Query(
                 @"SELECT 
 	                [col].[Name] AS [ForeignKeyColumn], [parent].[Name] AS [TableName], SCHEMA_NAME([parent].[schema_id]) AS [Schema], [parent_col].[name] AS [ColumnName]
                 FROM 
@@ -151,8 +151,55 @@ namespace AdamOneilSoftware.ModelClassBuilder
                         item => new ColumnRef() { Schema = item.Schema, TableName = item.TableName, ColumnName = item.ColumnName });
         }
 
+        public static Dictionary<string, string> GetUniqueConstraints(SqlConnection cn, string schema, string tableName)
+        {
+            var unique = cn.Query(
+                @"SELECT
+	                [col].[name] AS [ColumnName], [ndx].[name] AS [ConstraintName]
+                FROM 
+	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
+		                [ndx].[object_id]=[ndxcol].[object_id] AND
+		                [ndx].[index_id]=[ndxcol].[index_id]
+	                INNER JOIN [sys].[columns] [col] ON 
+		                [ndxcol].[column_id]=[col].[column_id] AND
+		                [ndxcol].[object_id]=[col].[object_id]
+	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
+                WHERE 
+	                [is_unique_constraint]=1 AND
+                    SCHEMA_NAME([t].[schema_id])=@schema AND
+                    [t].[name]=@table", new { schema = schema, table = tableName });
+            return unique.ToDictionary(
+                item => (string)item.ColumnName,
+                item => (string)item.ConstraintName);
+        }
+
+        public static IEnumerable<ColumnInfo> GetColumnInfo(SqlConnection connection, string schema, string tableName)
+        {
+            using (SqlCommand cmd = new SqlCommand($"SELECT * FROM [{schema}].[{tableName}]", connection))
+            {
+                return GetColumnInfo(cmd);
+            }
+        }
+
+        public static IEnumerable<ColumnInfo> GetColumnInfo(SqlConnection connection, string query)
+        {
+            using (SqlCommand cmd = new SqlCommand(query, connection))
+            {
+                return GetColumnInfo(cmd);
+            }
+        }
+
+        public static IEnumerable<ColumnInfo> GetColumnInfo(SqlCommand command)
+        {
+            using (SqlDataReader reader = command.ExecuteReader(CommandBehavior.SchemaOnly))
+            {
+                var tbl = reader.GetSchemaTable();
+                return GetColumnInfo(tbl);
+            }
+        }
+
         private StringBuilder CSharpClassFromTable(
-                    string schema, string tableName,
+            string schema, string tableName,
             Action<StringBuilder, IEnumerable<ColumnInfo>> header, Action<StringBuilder> footer, string className = null)
         {            
              return CSharpClassFromTable(Connection, schema, tableName, header, footer, className);
@@ -279,33 +326,13 @@ namespace AdamOneilSoftware.ModelClassBuilder
 
             return results;
         }
-        private Dictionary<string, string> GetUniqueConstraints(SqlConnection cn, string schema, string tableName)
-        {
-            var unique = cn.Query(
-                @"SELECT
-	                [col].[name] AS [ColumnName], [ndx].[name] AS [ConstraintName]
-                FROM 
-	                [sys].[indexes] [ndx] INNER JOIN [sys].[index_columns] [ndxcol] ON 
-		                [ndx].[object_id]=[ndxcol].[object_id] AND
-		                [ndx].[index_id]=[ndxcol].[index_id]
-	                INNER JOIN [sys].[columns] [col] ON 
-		                [ndxcol].[column_id]=[col].[column_id] AND
-		                [ndxcol].[object_id]=[col].[object_id]
-	                INNER JOIN [sys].[tables] [t] ON [col].[object_id]=[t].[object_id]
-                WHERE 
-	                [is_unique_constraint]=1 AND
-                    SCHEMA_NAME([t].[schema_id])=@schema AND
-                    [t].[name]=@table", new { schema = schema, table = tableName });
-            return unique.ToDictionary(
-                item => (string)item.ColumnName,
-                item => (string)item.ConstraintName);
-        }
 
         private static string CSharpTypeName(CSharpCodeProvider provider, Type type)
         {
             CodeTypeReference typeRef = new CodeTypeReference(type);
             return provider.GetTypeOutput(typeRef).Replace("System.", string.Empty);
         }
+
         private void WriteClassHeader(StringBuilder sb, IEnumerable<ColumnInfo> columns)
         {
             sb.AppendLine("using System;");
@@ -322,7 +349,7 @@ namespace AdamOneilSoftware.ModelClassBuilder
             sb.AppendLine("}"); // end namespace
         }
 
-        internal class ColumnInfo
+        public class ColumnInfo
         {
             public string Name { get; set; }
             public string CSharpType { get; set; }
