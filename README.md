@@ -9,11 +9,11 @@ I also had a need to generate classes both with and without `using` statements a
 This package has only one object `Engine` that provides access to everything on offer:
 
 ## Properties
+    SqlConnection Connection
+Connection used by all methods.
+
     string CodeNamespace 
 Sets the namespace that encloses the generated class.
-
-    string ConnectionString 
-SQL Server connection string used to execute and inspect the table or query. Required for the `*FromQuery` and `*FromTable` methods.
     
     bool IncludeAttributes 
 Indicates whether the [MaxLength] attribute is set on columns. Default is true.
